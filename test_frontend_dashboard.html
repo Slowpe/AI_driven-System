@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .success {
+            background: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border-color: #bee5eb;
+            color: #0c5460;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>VISTA Dashboard Connection Test</h1>
+    
+    <div class="test-section info">
+        <h3>Test Instructions</h3>
+        <p>This page tests the connection between frontend and backend dashboard endpoints.</p>
+        <p>Make sure the backend is running on http://localhost:8000</p>
+    </div>
+    
+    <div class="test-section">
+        <h3>1. Authentication Test</h3>
+        <button onclick="testAuth()">Test Registration & Login</button>
+        <div id="auth-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. Dashboard Endpoints Test</h3>
+        <button onclick="testDashboard()">Test Dashboard Endpoints</button>
+        <div id="dashboard-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>3. CORS Test</h3>
+        <button onclick="testCORS()">Test CORS</button>
+        <div id="cors-result"></div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let token = null;
+        
+        function showResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="${type}">${message}</div>`;
+        }
+        
+        async function testAuth() {
+            try {
+                const email = `test${Date.now()}@example.com`;
+                const userData = {
+                    email: email,
+                    password: 'testpass123',
+                    full_name: 'Test User',
+                    company_name: 'Test Company'
+                };
+                
+                // Register
+                const registerResponse = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(userData)
+                });
+                
+                if (!registerResponse.ok) {
+                    throw new Error('Registration failed');
+                }
+                
+                // Login
+                const loginData = new URLSearchParams({
+                    username: email,
+                    password: 'testpass123'
+                });
+                
+                const loginResponse = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: loginData
+                });
+                
+                if (!loginResponse.ok) {
+                    throw new Error('Login failed');
+                }
+                
+                const loginResult = await loginResponse.json();
+                token = loginResult.access_token;
+                
+                showResult('auth-result', 
+                    `✅ Authentication successful<br>Token: ${token.substring(0, 20)}...`, 
+                    'success');
+                
+            } catch (error) {
+                showResult('auth-result', 
+                    `❌ Authentication failed: ${error.message}`, 
+                    'error');
+            }
+        }
+        
+        async function testDashboard() {
+            if (!token) {
+                showResult('dashboard-result', 
+                    '❌ Please authenticate first', 
+                    'error');
+                return;
+            }
+            
+            const endpoints = [
+                { name: 'System Metrics', path: '/dashboard/metrics' },
+                { name: 'Threat Summary', path: '/dashboard/threats' },
+                { name: 'Performance Metrics', path: '/dashboard/performance' },
+                { name: 'Activity Timeline', path: '/dashboard/activity' }
+            ];
+            
+            let results = '';
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(`${API_BASE}${endpoint.path}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        results += `<div class="success">✅ ${endpoint.name}: OK</div>`;
+                    } else {
+                        results += `<div class="error">❌ ${endpoint.name}: ${response.status} - ${response.statusText}</div>`;
+                    }
+                } catch (error) {
+                    results += `<div class="error">❌ ${endpoint.name}: ${error.message}</div>`;
+                }
+            }
+            
+            showResult('dashboard-result', results);
+        }
+        
+        async function testCORS() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type'
+                    }
+                });
+                
+                if (response.ok) {
+                    showResult('cors-result', 
+                        '✅ CORS preflight successful', 
+                        'success');
+                } else {
+                    showResult('cors-result', 
+                        `❌ CORS preflight failed: ${response.status}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResult('cors-result', 
+                    `❌ CORS test failed: ${error.message}`, 
+                    'error');
+            }
+        }
+    </script>
+</body>
+</html> 

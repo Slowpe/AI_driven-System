@@ -1,0 +1,5 @@
+
+[2024-01-15 10:30:15] WARNING: Failed login attempt from IP 192.168.1.100
+[2024-01-15 10:30:16] INFO: User admin logged in successfully
+[2024-01-15 10:31:20] ERROR: Database connection timeout
+[2024-01-15 10:32:45] WARNING: High CPU usage detected: 85%

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        .file-input {
+            display: none;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #007bff;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .result {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>VISTA Upload Test</h1>
+    
+    <div>
+        <label>Upload Type:</label>
+        <select id="uploadType">
+            <option value="text">Text Analysis</option>
+            <option value="visual">Visual Analysis</option>
+        </select>
+    </div>
+    
+    <div>
+        <label>Upload Mode:</label>
+        <select id="uploadMode">
+            <option value="file">Single File</option>
+            <option value="folder">Multiple Files</option>
+        </select>
+    </div>
+    
+    <div class="upload-area" id="uploadArea">
+        <h3>Drop files here or click to select</h3>
+        <p id="uploadText">Choose files to upload</p>
+        <input type="file" id="fileInput" class="file-input" multiple>
+        <button class="btn" onclick="document.getElementById('fileInput').click()">Choose Files</button>
+    </div>
+    
+    <div class="progress" id="progress" style="display: none;">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+    
+    <div id="result"></div>
+    
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let token = null;
+        
+        // First, register and login
+        async function setupAuth() {
+            try {
+                const email = `test${Date.now()}@example.com`;
+                const userData = {
+                    email: email,
+                    password: 'testpass123',
+                    full_name: 'Test User',
+                    company_name: 'Test Company'
+                };
+                
+                // Register
+                const registerResponse = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(userData)
+                });
+                
+                if (!registerResponse.ok) {
+                    throw new Error('Registration failed');
+                }
+                
+                // Login
+                const loginData = new URLSearchParams({
+                    username: email,
+                    password: 'testpass123'
+                });
+                
+                const loginResponse = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: loginData
+                });
+                
+                if (!loginResponse.ok) {
+                    throw new Error('Login failed');
+                }
+                
+                const loginResult = await loginResponse.json();
+                token = loginResult.access_token;
+                console.log('Authentication successful');
+                
+            } catch (error) {
+                console.error('Auth error:', error);
+                showResult('Authentication failed: ' + error.message, 'error');
+            }
+        }
+        
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `<div class="result ${type}">${message}</div>`;
+        }
+        
+        function updateProgress(percent) {
+            const progress = document.getElementById('progress');
+            const progressBar = document.getElementById('progressBar');
+            progress.style.display = 'block';
+            progressBar.style.width = percent + '%';
+        }
+        
+        async function uploadFiles(files) {
+            if (!token) {
+                showResult('Not authenticated', 'error');
+                return;
+            }
+            
+            const uploadType = document.getElementById('uploadType').value;
+            const uploadMode = document.getElementById('uploadMode').value;
+            
+            updateProgress(10);
+            
+            try {
+                const formData = new FormData();
+                
+                if (uploadMode === 'file') {
+                    formData.append('file', files[0]);
+                } else {
+                    files.forEach(file => {
+                        formData.append('files', file);
+                    });
+                }
+                
+                formData.append('upload_type', uploadType);
+                
+                updateProgress(30);
+                
+                const endpoint = uploadMode === 'file' ? '/logs/upload' : '/logs/upload-folder';
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                updateProgress(80);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Upload failed: ${response.status} - ${errorText}`);
+                }
+                
+                const result = await response.json();
+                updateProgress(100);
+                
+                showResult(`Upload successful! ${JSON.stringify(result, null, 2)}`, 'success');
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                showResult('Upload failed: ' + error.message, 'error');
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                uploadFiles(files);
+            }
+        });
+        
+        document.getElementById('uploadArea').addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragover');
+        });
+        
+        document.getElementById('uploadArea').addEventListener('dragleave', (e) => {
+            e.currentTarget.classList.remove('dragover');
+        });
+        
+        document.getElementById('uploadArea').addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) {
+                uploadFiles(files);
+            }
+        });
+        
+        document.getElementById('uploadMode').addEventListener('change', (e) => {
+            const uploadText = document.getElementById('uploadText');
+            const fileInput = document.getElementById('fileInput');
+            
+            if (e.target.value === 'file') {
+                uploadText.textContent = 'Choose a single file to upload';
+                fileInput.multiple = false;
+            } else {
+                uploadText.textContent = 'Choose multiple files to upload';
+                fileInput.multiple = true;
+            }
+        });
+        
+        // Initialize
+        setupAuth();
+    </script>
+</body>
+</html> 

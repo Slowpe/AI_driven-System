@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VISTA Upload Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        .container {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #444;
+            border-radius: 5px;
+        }
+        .success { border-color: #4CAF50; background-color: #1b5e20; }
+        .error { border-color: #f44336; background-color: #b71c1c; }
+        .info { border-color: #2196F3; background-color: #0d47a1; }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #45a049; }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        .log {
+            background-color: #000;
+            color: #00ff00;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>VISTA Upload Debug Test</h1>
+    
+    <div class="container">
+        <h2>Authentication Test</h2>
+        <div id="auth-result" class="test-section info">
+            <p>Click the button below to test authentication</p>
+            <button onclick="testAuth()">Test Authentication</button>
+            <div id="auth-log" class="log"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Upload Test</h2>
+        <div id="upload-result" class="test-section info">
+            <p>Select a file and click upload to test</p>
+            <input type="file" id="test-file" accept=".txt,.log,.csv,.json,.png,.jpg,.jpeg">
+            <br>
+            <button onclick="testUpload()">Test Upload</button>
+            <div id="upload-log" class="log"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>API Endpoints Test</h2>
+        <div id="endpoints-result" class="test-section info">
+            <button onclick="testEndpoints()">Test API Endpoints</button>
+            <div id="endpoints-log" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = "http://localhost:8000/api/v1";
+        
+        function log(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}\n`;
+            element.textContent += logMessage;
+            element.scrollTop = element.scrollHeight;
+        }
+
+        function updateSection(sectionId, type) {
+            const section = document.getElementById(sectionId);
+            section.className = `test-section ${type}`;
+        }
+
+        async function testAuth() {
+            log('auth-log', 'Testing authentication...');
+            
+            const token = localStorage.getItem("access_token");
+            log('auth-log', `Token exists: ${!!token}`);
+            
+            if (token) {
+                log('auth-log', `Token: ${token.substring(0, 20)}...`);
+                
+                try {
+                    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    log('auth-log', `Response status: ${response.status}`);
+                    
+                    if (response.ok) {
+                        const user = await response.json();
+                        log('auth-log', `✅ Authentication successful: ${JSON.stringify(user, null, 2)}`);
+                        updateSection('auth-result', 'success');
+                    } else {
+                        const errorText = await response.text();
+                        log('auth-log', `❌ Authentication failed: ${response.status} ${response.statusText}`);
+                        log('auth-log', `Error details: ${errorText}`);
+                        updateSection('auth-result', 'error');
+                    }
+                } catch (error) {
+                    log('auth-log', `❌ Authentication error: ${error.message}`);
+                    updateSection('auth-result', 'error');
+                }
+            } else {
+                log('auth-log', '❌ No token found in localStorage');
+                updateSection('auth-result', 'error');
+            }
+        }
+
+        async function testUpload() {
+            log('upload-log', 'Testing upload...');
+            
+            const fileInput = document.getElementById('test-file');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                log('upload-log', '❌ No file selected');
+                updateSection('upload-result', 'error');
+                return;
+            }
+            
+            log('upload-log', `Selected file: ${file.name} (${file.size} bytes)`);
+            
+            const token = localStorage.getItem("access_token");
+            if (!token) {
+                log('upload-log', '❌ No authentication token');
+                updateSection('upload-result', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_type', 'text');
+            
+            try {
+                log('upload-log', 'Sending upload request...');
+                
+                const response = await fetch(`${API_BASE_URL}/logs/upload`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                log('upload-log', `Response status: ${response.status}`);
+                log('upload-log', `Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}`);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    log('upload-log', `✅ Upload successful: ${JSON.stringify(result, null, 2)}`);
+                    updateSection('upload-result', 'success');
+                } else {
+                    const errorText = await response.text();
+                    log('upload-log', `❌ Upload failed: ${response.status} ${response.statusText}`);
+                    log('upload-log', `Error details: ${errorText}`);
+                    
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        log('upload-log', `Error JSON: ${JSON.stringify(errorJson, null, 2)}`);
+                    } catch (e) {
+                        log('upload-log', 'Error is not JSON format');
+                    }
+                    
+                    updateSection('upload-result', 'error');
+                }
+            } catch (error) {
+                log('upload-log', `❌ Upload error: ${error.message}`);
+                updateSection('upload-result', 'error');
+            }
+        }
+
+        async function testEndpoints() {
+            log('endpoints-log', 'Testing API endpoints...');
+            
+            const endpoints = [
+                { name: 'Root', url: 'http://localhost:8000/' },
+                { name: 'Health', url: 'http://localhost:8000/health' },
+                { name: 'API Docs', url: 'http://localhost:8000/api/docs' },
+                { name: 'Logs (Auth Required)', url: `${API_BASE_URL}/logs` }
+            ];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(endpoint.url, {
+                        method: 'GET',
+                        headers: endpoint.name === 'Logs (Auth Required)' ? {
+                            'Authorization': `Bearer ${localStorage.getItem("access_token") || ''}`
+                        } : {}
+                    });
+                    
+                    log('endpoints-log', `${endpoint.name}: ${response.status} ${response.statusText}`);
+                } catch (error) {
+                    log('endpoints-log', `${endpoint.name}: Error - ${error.message}`);
+                }
+            }
+            
+            updateSection('endpoints-result', 'success');
+        }
+
+        // Auto-run authentication test on page load
+        window.onload = function() {
+            log('auth-log', 'Page loaded, checking authentication...');
+            setTimeout(testAuth, 1000);
+        };
+    </script>
+</body>
+</html> 
